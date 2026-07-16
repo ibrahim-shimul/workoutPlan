@@ -1,8 +1,9 @@
-const CACHE_NAME = 'liftlog-v8';
+const CACHE_NAME = 'liftlog-v9';
 const ASSETS = [
   '/',
   '/index.html',
-  '/manifest.json'
+  '/manifest.json',
+  '/icons/icon-192.png'
 ];
 
 self.addEventListener('install', (e) => {

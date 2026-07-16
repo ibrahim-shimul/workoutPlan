@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Lift Log</title>
 <link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#1f6f4a">
+<meta name="theme-color" content="#1c1e1f">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -225,6 +225,18 @@
   .toast{position:fixed;bottom:130px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--brass);color:var(--iron);font-size:13px;font-weight:700;padding:11px 20px;border-radius:99px;opacity:0;transition:.25s;z-index:40;pointer-events:none;white-space:nowrap;}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 
+  .splash{position:fixed;inset:0;z-index:999;background:var(--iron);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;transition:opacity .35s ease,visibility .35s ease;}
+  .splash.hide{opacity:0;visibility:hidden;pointer-events:none;}
+  .splash-icon{width:88px;height:88px;border-radius:20px;box-shadow:0 10px 30px rgba(0,0,0,.5);animation:splashPop .5s cubic-bezier(.3,1.6,.5,1);}
+  @keyframes splashPop{0%{transform:scale(.7);opacity:0;}100%{transform:scale(1);opacity:1;}}
+  .splash-word{font-family:'Oswald';font-weight:700;font-size:17px;letter-spacing:.04em;text-transform:uppercase;color:var(--chalk);opacity:0;animation:splashFadeUp .5s ease .15s forwards;}
+  .splash-word span{color:var(--rust);}
+  @keyframes splashFadeUp{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+  .splash-bar{width:120px;height:3px;border-radius:99px;background:var(--iron-3);overflow:hidden;opacity:0;animation:splashFadeUp .4s ease .25s forwards;}
+  .splash-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--rust),var(--rust-lt));border-radius:99px;animation:splashLoad 1s ease-out .25s forwards;}
+  @keyframes splashLoad{from{width:0%;}to{width:100%;}}
+  @media (prefers-reduced-motion:reduce){.splash-icon,.splash-word,.splash-bar,.splash-fill{animation:none!important;opacity:1!important;transform:none!important;}.splash-fill{width:100%!important;}}
+
   .summary-overlay{position:fixed;inset:0;background:rgba(10,10,10,.68);display:none;align-items:center;justify-content:center;z-index:60;padding:24px;}
   .summary-overlay.show{display:flex;}
   .summary-card{position:relative;background:var(--iron-2);border:1px solid var(--line);border-radius:16px;padding:28px 22px 22px;max-width:320px;width:100%;text-align:center;transform:rotate(-1deg);box-shadow:0 24px 60px rgba(0,0,0,.55);}
@@ -255,6 +267,12 @@
 </style>
 </head>
 <body>
+
+<div class="splash" id="splash">
+  <img src="/icons/icon-192.png" alt="" class="splash-icon">
+  <div class="splash-word">Lift<span>·</span>Log</div>
+  <div class="splash-bar"><div class="splash-fill"></div></div>
+</div>
 
 <header>
   <div class="brand">
@@ -1053,6 +1071,12 @@ window.addEventListener('scroll',()=>{
   document.querySelectorAll('#shift button').forEach(x=>x.classList.toggle('on',x.dataset.s===shift));
   setView('today');
   renderStreak();
+  setTimeout(()=>{
+    const sp=document.getElementById('splash');
+    if(!sp) return;
+    sp.classList.add('hide');
+    setTimeout(()=>sp.remove(),400);
+  },850);
 })();
 </script>
 <script>
