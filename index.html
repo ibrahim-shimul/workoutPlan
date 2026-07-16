@@ -264,6 +264,18 @@
   .ex-detail-row{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--chalk-dim);}
   .ex-detail-row span:last-child{color:var(--chalk);font-family:'JetBrains Mono';font-weight:600;}
   @media (prefers-reduced-motion:reduce){*{transition:none!important;}}
+
+  .gym-divider{display:flex;align-items:center;gap:10px;margin:16px 0;color:var(--chalk-dim);font-family:'Oswald';font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.08em;}
+  .gym-divider::before,.gym-divider::after{content:'';flex:1;height:1px;background:var(--line);}
+  .meal-time{font-size:11.5px;color:var(--chalk-dim);font-weight:600;text-transform:uppercase;letter-spacing:.04em;font-family:'JetBrains Mono';margin-bottom:3px;}
+  .meal-items{font-size:12.5px;color:var(--chalk-dim);margin-top:4px;line-height:1.4;}
+  .meal-row{display:flex;align-items:center;gap:12px;}
+  .meal-row .mr-l{flex:1;min-width:0;}
+  .meal-tick{width:44px;height:44px;border-radius:12px;border:2px solid var(--line);background:var(--iron);display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;transition:transform .1s,background .12s,border-color .12s;-webkit-user-select:none;user-select:none;}
+  .meal-tick:active{transform:scale(.9);}
+  .meal-tick svg{width:20px;height:20px;fill:none;stroke:var(--chalk-dim);stroke-width:2.4;opacity:0;transition:opacity .12s;}
+  .meal-tick.on{background:var(--rust);border-color:var(--rust);}
+  .meal-tick.on svg{stroke:var(--chalk);opacity:1;}
 </style>
 </head>
 <body>
@@ -303,6 +315,10 @@
   <button id="tabToday" class="on">
     <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
     Today
+  </button>
+  <button id="tabMeals">
+    <svg viewBox="0 0 24 24"><path d="M6 2v8a2 2 0 002 2 2 2 0 002-2V2M8 12v10M17 2c-2 0-3.5 2-3.5 5s1 4 1 4V22M17 2v9"/></svg>
+    Meals
   </button>
   <button id="tabPlan">
     <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
@@ -347,6 +363,30 @@ const SESS_KEY='liftlog:sessions';
 const DAY_KEY='liftlog:draft';
 const BODY_KEY='liftlog:body';
 const SETTINGS_KEY='liftlog:settings';
+const MEALDRAFT_KEY='liftlog:mealdraft';
+const MEALHIST_KEY='liftlog:mealhistory';
+
+const GOLDEN_RULE='Within 30 minutes of finishing the gym: 2 eggs + 1 glass of milk. Never skip this, whichever shift.';
+const MEAL_SCHEDULE={
+  morning:[
+    {id:'m-pre',time:'8:15–8:30 AM',name:'Pre-workout',items:'2 bananas + 3 dates (or extra banana if no dates)'},
+    {id:'m-gym',time:'9:00–11:00 AM',gym:true},
+    {id:'m-post',time:'11:00–11:30 AM',name:'Post-workout',items:'2 boiled eggs + 1 glass milk'},
+    {id:'m-1',time:'11:00–11:30 AM',name:'Meal 1 (rest of breakfast)',items:'3 rutis + 20g peanuts + 1 tsp honey + 1 multivitamin'},
+    {id:'m-2',time:'1:00–1:30 PM',name:'Meal 2 (lunch)',items:'Rice + dal + vegetables + chicken/fish if mess has it, else 2 eggs'},
+    {id:'m-snack',time:'4:30–5:00 PM',name:'Afternoon snack',items:'1 banana + peanuts'},
+    {id:'m-3',time:'8:30–9:00 PM',name:'Meal 3 (dinner)',items:'Rice/roti + dal + vegetables + chicken/fish if mess has it, else 1 egg'},
+  ],
+  evening:[
+    {id:'e-1',time:'Morning (before office)',name:'Meal 1',items:'2 eggs + 3 rutis + 20g peanuts + 1 tsp honey + 1 multivitamin'},
+    {id:'e-snack',time:'During office',name:'Optional snack',items:'Banana/peanuts if available'},
+    {id:'e-2',time:'4:30 PM',name:'Meal 2 (main meal of the day)',items:'Rice + dal + vegetables + chicken/fish if mess has it, else 2 eggs'},
+    {id:'e-pre',time:'6:15–6:30 PM',name:'Pre-workout',items:'2 bananas + 3 dates (or extra banana if no dates)'},
+    {id:'e-gym',time:'7:00–9:00 PM',gym:true},
+    {id:'e-post',time:'9:00 PM',name:'Post-workout',items:'2 boiled eggs + 1 glass milk'},
+    {id:'e-3',time:'10:00–10:30 PM',name:'Meal 3 (dinner)',items:'Rice/roti + dal + vegetables + chicken/fish if mess has it, else 1 egg'},
+  ],
+};
 
 const DEFAULT_PLAN=[
   {id:'bench',name:'Flat Machine Bench Press',sets:4,reps:12,weight:''},
@@ -358,6 +398,7 @@ const DEFAULT_PLAN=[
 ];
 
 let plan=[], sessions=[], draft=null, bodyLog=[], settings={cycleStart:null,workOn:3,restOn:1};
+let mealDraft=null, mealHistory=[];
 let shift='morning', view='today', editingId=null, adding=false;
 let justCompletedId=null;
 let calYear=null, calMonth=null, cycleEditing=false;
@@ -393,10 +434,15 @@ async function loadAll(){
   const loadedSettings=await get(SETTINGS_KEY, {});
   settings={cycleStart:null,workOn:3,restOn:1,restTimerSec:90,...loadedSettings};
   if(!draft || draft.date!==todayISO()) draft=null;
+  mealDraft=await get(MEALDRAFT_KEY, null);
+  mealHistory=await get(MEALHIST_KEY, []);
+  if(!mealDraft || mealDraft.date!==todayISO()) mealDraft=null;
 }
 const savePlan=()=>set(PLAN_KEY,plan);
 const saveSessions=()=>set(SESS_KEY,sessions);
 const saveDraft=()=>set(DAY_KEY,draft);
+const saveMealDraft=()=>set(MEALDRAFT_KEY,mealDraft);
+const saveMealHistory=()=>set(MEALHIST_KEY,mealHistory);
 const saveBody=()=>set(BODY_KEY,bodyLog);
 const saveSettings=()=>set(SETTINGS_KEY,settings);
 const daysBetweenISO=(a,b)=>Math.round((Date.parse(b+'T00:00:00Z')-Date.parse(a+'T00:00:00Z'))/86400000);
@@ -652,6 +698,77 @@ function renderToday(){
   btn.classList.toggle('done',full);
   btn.textContent=full?'Finish & save workout':'Save workout';
   document.getElementById('saveSub').textContent=`${doneSets} of ${totalSets} sets ticked`;
+}
+
+function ensureMealDraft(){
+  if(!mealDraft || mealDraft.date!==todayISO()) mealDraft={date:todayISO(),shift,checked:{}};
+  mealDraft.shift=shift;
+}
+function renderMeals(){
+  ensureMealDraft();
+  const main=document.getElementById('main');
+  const items=MEAL_SCHEDULE[shift];
+  const tickable=items.filter(m=>!m.gym);
+  const doneCount=tickable.filter(m=>mealDraft.checked[m.id]).length;
+
+  let html=`<h2 class="view-title">Meals</h2><p class="view-note">Shift-aware checklist — tap a meal once you've eaten it.</p>`;
+  html+=`<div class="rest-banner"><svg viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 019.5 4a8.5 8.5 0 1010.5 10.5z"/></svg><span>${GOLDEN_RULE}</span></div>`;
+  html+=items.map(m=>{
+    if(m.gym) return `<div class="gym-divider">${m.time} · Gym</div>`;
+    const on=!!mealDraft.checked[m.id];
+    return `<div class="ex ${on?'done':''}">
+      <div class="meal-row">
+        <div class="mr-l">
+          <div class="meal-time">${m.time}</div>
+          <div class="ex-name" style="cursor:default;">${m.name}</div>
+          <div class="meal-items">${m.items}</div>
+        </div>
+        <div class="meal-tick ${on?'on':''}" data-meal="${m.id}"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></div>
+      </div>
+    </div>`;
+  }).join('');
+  html+=`<button class="save" id="saveMealsBtn">${doneCount===tickable.length?'Finish & save meals':'Save meals'}</button>`;
+  html+=`<div class="save-sub">${doneCount} of ${tickable.length} meals ticked</div>`;
+
+  const sortedHist=[...mealHistory].sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
+  if(sortedHist.length){
+    html+=`<h2 class="view-title" style="margin-top:22px;">Meal history</h2>`;
+    html+=sortedHist.map(h=>{
+      const hDone=h.meals.filter(x=>x.checked).length;
+      return `<div class="hist-day">
+        <div class="hist-top" data-mhid="${h.id}">
+          <div><div class="hist-date">${fmtDate(h.date)}</div><div class="hist-meta">${hDone}/${h.meals.length} meals logged</div></div>
+          <span class="pill ${h.shift==='morning'?'m':'e'}">${h.shift}</span>
+        </div>
+        <div class="hist-body" id="mhb-${h.id}">${h.meals.map(x=>`<div class="hrow"><span class="hn">${x.name}</span><span class="hv">${x.checked?'✓':'—'}</span></div>`).join('')}</div>
+      </div>`;
+    }).join('');
+  }
+
+  main.innerHTML=html;
+  main.querySelectorAll('.meal-tick').forEach(t=>t.addEventListener('click',()=>{
+    const id=t.dataset.meal;
+    mealDraft.checked[id]=!mealDraft.checked[id];
+    haptic(8);
+    saveMealDraft(); renderMeals();
+  }));
+  const saveBtn=document.getElementById('saveMealsBtn');
+  if(saveBtn) saveBtn.addEventListener('click',saveMeals);
+  main.querySelectorAll('[data-mhid]').forEach(t=>t.addEventListener('click',()=>document.getElementById('mhb-'+t.dataset.mhid).classList.toggle('open')));
+}
+async function saveMeals(){
+  ensureMealDraft();
+  const items=MEAL_SCHEDULE[shift].filter(m=>!m.gym);
+  const doneCount=items.filter(m=>mealDraft.checked[m.id]).length;
+  if(doneCount===0){toast('Tick at least one meal before you save');return;}
+  const meals=items.map(m=>({name:m.name,itemsText:m.items,checked:!!mealDraft.checked[m.id]}));
+  const idx=mealHistory.findIndex(h=>h.date===todayISO()&&h.shift===shift);
+  const rec={id:Date.now(),date:todayISO(),shift,meals};
+  if(idx>=0) mealHistory[idx]=rec; else mealHistory.push(rec);
+  await saveMealHistory();
+  haptic(20);
+  toast(`Meals saved — ${doneCount} of ${items.length} logged`);
+  renderMeals();
 }
 
 function showSummary(rec){
@@ -1022,13 +1139,15 @@ function renderHistory(){
 function setView(v){
   view=v; adding=false; editingId=null; cycleEditing=false;
   document.getElementById('tabToday').classList.toggle('on',v==='today');
+  document.getElementById('tabMeals').classList.toggle('on',v==='meals');
   document.getElementById('tabPlan').classList.toggle('on',v==='plan');
   document.getElementById('tabHist').classList.toggle('on',v==='history');
   document.getElementById('tabBody').classList.toggle('on',v==='body');
   const today=v==='today';
-  document.getElementById('daterow').style.display=today?'flex':'none';
+  document.getElementById('daterow').style.display=(today||v==='meals')?'flex':'none';
   document.getElementById('savebar').style.display=today?'block':'none';
   if(v==='today'){ renderToday(); syncNoteInput(); }
+  else if(v==='meals')renderMeals();
   else if(v==='plan')renderPlan(); else if(v==='history')renderHistory(); else renderBody();
   const mainEl=document.getElementById('main');
   mainEl.classList.remove('anim'); void mainEl.offsetWidth; mainEl.classList.add('anim');
@@ -1041,7 +1160,8 @@ document.getElementById('shift').addEventListener('click',e=>{
   if(b.classList.contains('on'))return;
   haptic(6);
   shift=b.dataset.s; document.querySelectorAll('#shift button').forEach(x=>x.classList.toggle('on',x===b));
-  ensureDraft(); saveDraft(); renderToday();
+  if(view==='meals'){ ensureMealDraft(); saveMealDraft(); renderMeals(); }
+  else { ensureDraft(); saveDraft(); renderToday(); }
 });
 document.getElementById('saveBtn').addEventListener('click',saveWorkout);
 document.getElementById('summaryClose').addEventListener('click',()=>document.getElementById('summaryOverlay').classList.remove('show'));
@@ -1056,6 +1176,7 @@ document.getElementById('exerciseOverlay').addEventListener('click',e=>{
   if(e.target.id==='exerciseOverlay') e.currentTarget.classList.remove('show');
 });
 document.getElementById('tabToday').addEventListener('click',()=>setView('today'));
+document.getElementById('tabMeals').addEventListener('click',()=>setView('meals'));
 document.getElementById('tabPlan').addEventListener('click',()=>setView('plan'));
 document.getElementById('tabHist').addEventListener('click',()=>setView('history'));
 document.getElementById('tabBody').addEventListener('click',()=>setView('body'));
