@@ -51,6 +51,9 @@
   .ex-meta{font-size:11.5px;color:var(--chalk-dim);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-top:3px;font-family:'JetBrains Mono';}
   .ex-idx{font-family:'Oswald';font-weight:700;font-size:13px;color:var(--chalk);background:var(--rust);min-width:26px;height:26px;border-radius:5px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transform:rotate(-2deg);}
   .ex.done .ex-idx{background:var(--brass);color:var(--iron);}
+  @keyframes clank{0%{transform:scale(1) rotate(-2deg);}35%{transform:scale(1.32) rotate(-2deg);box-shadow:0 0 0 9px rgba(184,134,58,.3);}100%{transform:scale(1) rotate(-2deg);box-shadow:0 0 0 0 rgba(184,134,58,0);}}
+  .ex-idx.clank{animation:clank .5s cubic-bezier(.3,1.5,.5,1);}
+  @media (prefers-reduced-motion:reduce){.ex-idx.clank{animation:none;}}
 
   .wt{display:flex;align-items:center;gap:8px;margin:13px 0 14px;flex-wrap:wrap;}
   .wt label{font-size:10.5px;font-weight:600;color:var(--chalk-dim);text-transform:uppercase;letter-spacing:.05em;}
@@ -95,6 +98,14 @@
   .tonnage-num{font-family:'JetBrains Mono';font-weight:700;font-size:34px;color:var(--rust-lt);letter-spacing:.01em;font-variant-numeric:tabular-nums;}
   .tonnage-unit{font-size:11px;color:var(--chalk-dim);text-transform:uppercase;letter-spacing:.06em;margin-top:2px;font-weight:600;}
 
+  .heatmap-wrap{background:var(--iron-2);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px;}
+  .heatmap-label{font-size:10.5px;color:var(--chalk-dim);text-transform:uppercase;letter-spacing:.07em;font-weight:600;margin-bottom:10px;}
+  .heatmap{display:grid;grid-template-rows:repeat(7,1fr);grid-auto-flow:column;grid-auto-columns:11px;gap:3px;overflow-x:auto;padding-bottom:2px;}
+  .hm-cell{width:11px;height:11px;border-radius:3px;background:var(--iron-3);}
+  .hm-cell.hm-blank{background:transparent;}
+  .hm-cell.hm-1{background:var(--rust-d);}
+  .hm-cell.hm-2{background:var(--rust-lt);box-shadow:0 0 0 1px rgba(221,109,69,.35) inset;}
+
   .plan-ex{background:var(--iron-2);border:1px solid var(--line);border-radius:12px;padding:12px 13px;margin-bottom:10px;display:flex;align-items:center;gap:10px;}
   .plan-ex .pn{flex:1;min-width:0;}
   .plan-ex .pname{font-family:'Oswald';font-weight:600;font-size:15px;line-height:1.2;text-transform:uppercase;color:var(--chalk);}
@@ -136,6 +147,17 @@
 
   .toast{position:fixed;bottom:130px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--brass);color:var(--iron);font-size:13px;font-weight:700;padding:11px 20px;border-radius:99px;opacity:0;transition:.25s;z-index:40;pointer-events:none;white-space:nowrap;}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  .summary-overlay{position:fixed;inset:0;background:rgba(10,10,10,.68);display:none;align-items:center;justify-content:center;z-index:60;padding:24px;}
+  .summary-overlay.show{display:flex;}
+  .summary-card{position:relative;background:var(--iron-2);border:1px solid var(--line);border-radius:16px;padding:28px 22px 22px;max-width:320px;width:100%;text-align:center;transform:rotate(-1deg);box-shadow:0 24px 60px rgba(0,0,0,.55);}
+  .summary-card::before{content:'';position:absolute;top:12px;left:12px;right:12px;bottom:12px;border:1px dashed var(--line);border-radius:9px;pointer-events:none;}
+  .summary-kicker{font-family:'Oswald';font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--brass);margin-bottom:6px;}
+  .summary-title{font-family:'Oswald';font-weight:700;font-size:24px;text-transform:uppercase;letter-spacing:.01em;color:var(--chalk);margin-bottom:20px;}
+  .summary-stats{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:22px;}
+  .summary-stat .n{font-family:'JetBrains Mono';font-weight:700;font-size:22px;color:var(--rust-lt);font-variant-numeric:tabular-nums;}
+  .summary-stat .l{font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--chalk-dim);margin-top:3px;font-weight:600;}
+  .summary-close{width:100%;height:46px;border:0;border-radius:10px;background:var(--rust);color:var(--chalk);font-family:'Oswald';font-weight:600;text-transform:uppercase;letter-spacing:.03em;font-size:14px;cursor:pointer;}
   @media (prefers-reduced-motion:reduce){*{transition:none!important;}}
 </style>
 </head>
@@ -182,6 +204,20 @@
 
 <div class="toast" id="toast"></div>
 
+<div class="summary-overlay" id="summaryOverlay">
+  <div class="summary-card">
+    <div class="summary-kicker">Workout logged</div>
+    <div class="summary-title" id="sumTitle">Saved</div>
+    <div class="summary-stats">
+      <div class="summary-stat"><div class="n" id="sumSets">0/0</div><div class="l">Sets</div></div>
+      <div class="summary-stat"><div class="n" id="sumKg">0</div><div class="l">Kg moved</div></div>
+      <div class="summary-stat"><div class="n" id="sumMin">–</div><div class="l">Duration</div></div>
+      <div class="summary-stat"><div class="n" id="sumStreak">0</div><div class="l">Day streak</div></div>
+    </div>
+    <button class="summary-close" id="summaryClose" type="button">Back to it</button>
+  </div>
+</div>
+
 <script>
 const PLAN_KEY='liftlog:plan';
 const SESS_KEY='liftlog:sessions';
@@ -198,9 +234,13 @@ const DEFAULT_PLAN=[
 
 let plan=[], sessions=[], draft=null;
 let shift='morning', view='today', editingId=null, adding=false;
+let justCompletedId=null;
 
 const todayISO=()=>new Date().toISOString().slice(0,10);
 const fmtDate=d=>new Date(d+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
+/* Pure-UTC date math so it never drifts a day against todayISO() (which is UTC-based) in UTC+ timezones */
+const addDaysISO=(iso,delta)=>{const d=new Date(iso+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+delta);return d.toISOString().slice(0,10);};
+const dowUTC=iso=>new Date(iso+'T00:00:00Z').getUTCDay();
 
 async function get(k,fb){
   try{
@@ -244,11 +284,11 @@ function computeStreak(){
   if(!sessions.length) return 0;
   const dates=[...new Set(sessions.map(s=>s.date))];
   const has=d=>dates.includes(d);
-  const cursor=new Date(todayISO()+'T00:00:00');
-  if(!has(todayISO())) cursor.setDate(cursor.getDate()-1);
+  let cursor=todayISO();
+  if(!has(cursor)) cursor=addDaysISO(cursor,-1);
   let count=0;
-  while(has(cursor.toISOString().slice(0,10))){
-    count++; cursor.setDate(cursor.getDate()-1);
+  while(has(cursor)){
+    count++; cursor=addDaysISO(cursor,-1);
   }
   return count;
 }
@@ -316,7 +356,7 @@ function renderToday(){
   ensureDraft();
   const main=document.getElementById('main');
   if(!plan.length){
-    main.innerHTML=`<div class="empty"><div class="big">No exercises yet</div><p>Add your workouts in the Plan tab first, then come back here to log them.</p></div>`;
+    main.innerHTML=`<div class="empty"><div class="big">Bar's empty</div><p>Add exercises in Plan, then come back and get to work.</p></div>`;
     document.getElementById('saveSub').textContent=''; return;
   }
   main.innerHTML=plan.map((ex,i)=>{
@@ -330,7 +370,7 @@ function renderToday(){
     return `<div class="ex ${allDone?'done':''}">
       <div class="ex-head">
         <div><div class="ex-name">${ex.name}</div><div class="ex-meta">${ex.sets} sets × ${ex.reps} reps</div></div>
-        <div class="ex-idx">${allDone?'✓':i+1}</div>
+        <div class="ex-idx${justCompletedId===ex.id?' clank':''}">${allDone?'✓':i+1}</div>
       </div>
       <div class="wt">
         <label>Weight</label>
@@ -343,12 +383,18 @@ function renderToday(){
       <div class="ticks">${ticks}</div>
     </div>`;
   }).join('');
+  justCompletedId=null;
 
   main.querySelectorAll('.tick').forEach(t=>t.addEventListener('click',()=>{
-    const ex=t.dataset.ex, si=+t.dataset.si;
-    const turningOn=!draft.marks[ex][si];
-    draft.marks[ex][si]=turningOn;
+    const exId=t.dataset.ex, si=+t.dataset.si;
+    const ex=plan.find(p=>p.id===exId);
+    const marks=draft.marks[exId];
+    const wasAllDone=marks.filter(Boolean).length===ex.sets;
+    const turningOn=!marks[si];
+    marks[si]=turningOn;
     if(turningOn&&!draft.startedAt) draft.startedAt=Date.now();
+    const nowAllDone=marks.filter(Boolean).length===ex.sets;
+    if(turningOn&&!wasAllDone&&nowAllDone) justCompletedId=exId;
     saveDraft(); renderToday();
   }));
   main.querySelectorAll('input[data-wex]').forEach(inp=>inp.addEventListener('input',()=>{
@@ -381,11 +427,21 @@ function renderToday(){
   document.getElementById('saveSub').textContent=`${doneSets} of ${totalSets} sets ticked`;
 }
 
+function showSummary(rec){
+  document.getElementById('sumTitle').textContent=rec.doneSets===rec.totalSets?'Complete':'Saved';
+  document.getElementById('sumSets').textContent=`${rec.doneSets}/${rec.totalSets}`;
+  const kg=rec.entries.reduce((a,e)=>{const w=parseFloat(e.weight);return a+(!isNaN(w)?w*e.reps*e.done:0);},0);
+  document.getElementById('sumKg').textContent=Math.round(kg).toLocaleString('en-GB');
+  document.getElementById('sumMin').textContent=rec.durationMin?`${rec.durationMin}m`:'–';
+  document.getElementById('sumStreak').textContent=computeStreak();
+  document.getElementById('summaryOverlay').classList.add('show');
+}
+
 async function saveWorkout(){
   ensureDraft();
   const totalSets=plan.reduce((a,e)=>a+e.sets,0);
   const doneSets=plan.reduce((a,e)=>a+draft.marks[e.id].filter(Boolean).length,0);
-  if(doneSets===0){toast('Tick at least one set first');return;}
+  if(doneSets===0){toast('Tick at least one set before you save');return;}
   const entries=plan.map(ex=>({name:ex.name,reps:ex.reps,sets:ex.sets,done:draft.marks[ex.id].filter(Boolean).length,weight:draft.weights[ex.id]||''})).filter(e=>e.done>0);
   const durationMin=draft.startedAt?Math.max(1,Math.round((Date.now()-draft.startedAt)/60000)):null;
   const idx=sessions.findIndex(s=>s.date===todayISO()&&s.shift===shift);
@@ -393,14 +449,14 @@ async function saveWorkout(){
   if(idx>=0)sessions[idx]=rec; else sessions.push(rec);
   await saveSessions();
   draft=null; await set(DAY_KEY,null);
-  toast(doneSets===totalSets?'Workout complete — saved':'Workout saved');
   renderToday();
   renderStreak();
+  showSummary(rec);
 }
 
 function renderPlan(){
   const main=document.getElementById('main');
-  let html=`<h2 class="view-title">Your plan</h2><p class="view-note">Set each exercise once — name, sets, reps, and a default weight. The Today tab turns every set into a tick box.</p>`;
+  let html=`<h2 class="view-title">Your plan</h2><p class="view-note">Set it once — name, sets, reps, default weight. Today turns every set into a tap.</p>`;
   if(adding||editingId){
     const ex=editingId?plan.find(p=>p.id===editingId):{name:'',sets:4,reps:12,weight:''};
     html+=`<div class="form">
@@ -427,7 +483,7 @@ function renderPlan(){
   if(add)add.addEventListener('click',()=>{adding=true;editingId=null;renderPlan();});
   main.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',()=>{editingId=b.dataset.edit;adding=false;renderPlan();window.scrollTo({top:0,behavior:'smooth'});}));
   main.querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click',async()=>{
-    if(plan.length<=1){toast('Keep at least one exercise');return;}
+    if(plan.length<=1){toast("Keep at least one exercise — can't log an empty plan");return;}
     plan=plan.filter(p=>p.id!==b.dataset.del); await savePlan(); renderPlan();
   }));
   const cancel=document.getElementById('f-cancel');
@@ -438,9 +494,9 @@ function renderPlan(){
     const sets=parseInt(document.getElementById('f-sets').value)||0;
     const reps=parseInt(document.getElementById('f-reps').value)||0;
     const weight=document.getElementById('f-weight').value.trim();
-    if(!name){toast('Add a name');return;}
+    if(!name){toast('Give the exercise a name');return;}
     if(sets<1||reps<1){toast('Sets and reps must be at least 1');return;}
-    if(sets>12){toast('Max 12 sets');return;}
+    if(sets>12){toast('Cap sets at 12 per exercise');return;}
     if(editingId){const ex=plan.find(p=>p.id===editingId);ex.name=name;ex.sets=sets;ex.reps=reps;ex.weight=weight;}
     else plan.push({id:'x'+Date.now(),name,sets,reps,weight});
     await savePlan(); adding=false; editingId=null; renderPlan();
@@ -456,16 +512,33 @@ function lifetimeTonnage(){
   return Math.round(total);
 }
 
+function heatmapHtml(){
+  const WEEKS=14, DAYS=WEEKS*7;
+  const cells=[];
+  for(let i=DAYS-1;i>=0;i--){
+    const iso=addDaysISO(todayISO(),-i);
+    cells.push({date:iso,count:sessions.filter(s=>s.date===iso).length,dow:dowUTC(iso)});
+  }
+  const blanks=Array.from({length:cells[0].dow},()=>({blank:true}));
+  const cellsHtml=blanks.concat(cells).map(c=>{
+    if(c.blank) return `<span class="hm-cell hm-blank"></span>`;
+    const lvl=c.count===0?0:c.count===1?1:2;
+    const title=c.count?`${c.date} · ${c.count} session${c.count>1?'s':''}`:c.date;
+    return `<span class="hm-cell hm-${lvl}" title="${title}"></span>`;
+  }).join('');
+  return `<div class="heatmap-wrap"><div class="heatmap-label">Last ${WEEKS} weeks</div><div class="heatmap">${cellsHtml}</div></div>`;
+}
+
 function renderHistory(){
   const main=document.getElementById('main');
   if(!sessions.length){
-    main.innerHTML=`<h2 class="view-title">History</h2><div class="empty"><div class="big">No sessions saved</div><p>Finish a workout in the Today tab and it lands here — every session, with the sets you completed and the weight you used.</p></div>`;
+    main.innerHTML=`<h2 class="view-title">History</h2><div class="empty"><div class="big">Nothing banked yet</div><p>Finish a workout in Today and it'll show up here — every session, every plate you moved.</p></div>`;
     return;
   }
   const sorted=[...sessions].sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
   const tonnage=lifetimeTonnage();
   const tonnageHtml=tonnage>0?`<div class="tonnage"><div class="tonnage-label">Total lifted</div><div class="tonnage-num">${tonnage.toLocaleString('en-GB')}</div><div class="tonnage-unit">kg, all-time</div></div>`:'';
-  main.innerHTML=`<h2 class="view-title">History</h2>`+tonnageHtml+sorted.map(s=>{
+  main.innerHTML=`<h2 class="view-title">History</h2>`+tonnageHtml+heatmapHtml()+sorted.map(s=>{
     const rows=s.entries.map(e=>`<div class="hrow"><span class="hn">${e.name}</span><span class="hv">${e.done}/${e.sets} sets${e.weight?` · ${e.weight}kg`:''}</span></div>`).join('');
     const durationTxt=s.durationMin?` · ${s.durationMin} min`:'';
     return `<div class="hist-day">
@@ -498,6 +571,10 @@ document.getElementById('shift').addEventListener('click',e=>{
   ensureDraft(); saveDraft(); renderToday();
 });
 document.getElementById('saveBtn').addEventListener('click',saveWorkout);
+document.getElementById('summaryClose').addEventListener('click',()=>document.getElementById('summaryOverlay').classList.remove('show'));
+document.getElementById('summaryOverlay').addEventListener('click',e=>{
+  if(e.target.id==='summaryOverlay') e.currentTarget.classList.remove('show');
+});
 document.getElementById('tabToday').addEventListener('click',()=>setView('today'));
 document.getElementById('tabPlan').addEventListener('click',()=>setView('plan'));
 document.getElementById('tabHist').addEventListener('click',()=>setView('history'));
