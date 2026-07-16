@@ -51,6 +51,17 @@
   main.anim{animation:viewFade .22s ease-out;}
   @media (prefers-reduced-motion:reduce){main.anim{animation:none;}}
 
+  .rest-timer{background:var(--iron-2);border:1px solid var(--rust);border-radius:14px;padding:14px;margin-bottom:14px;}
+  .rt-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;}
+  .rt-label{font-family:'Oswald';font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--rust-lt);}
+  .rt-time{font-family:'JetBrains Mono';font-weight:700;font-size:22px;color:var(--chalk);font-variant-numeric:tabular-nums;}
+  .rt-bar{height:6px;border-radius:99px;background:var(--iron);overflow:hidden;margin-bottom:11px;}
+  .rt-fill{height:100%;background:linear-gradient(90deg,var(--rust),var(--rust-lt));border-radius:99px;transition:width 1s linear;}
+  .rt-actions{display:flex;gap:8px;}
+  .rt-actions button{flex:1;height:40px;border-radius:9px;border:1px solid var(--line);background:var(--iron);color:var(--chalk-dim);font-family:'Oswald';font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.02em;cursor:pointer;transition:transform .1s;-webkit-user-select:none;user-select:none;}
+  .rt-actions button:active{transform:scale(.95);}
+  .rt-actions #rtSkip{flex:1.5;background:var(--rust);border-color:var(--rust);color:var(--chalk);}
+
   .ex{background:var(--iron-2);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px;}
   .ex.done{border-color:rgba(193,80,46,.5);background:linear-gradient(155deg,var(--iron-2),rgba(193,80,46,.08));}
   .ex-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
@@ -148,6 +159,14 @@
   .spark-wrap{background:var(--iron-2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:14px;}
   .spark-label{font-size:10.5px;color:var(--chalk-dim);text-transform:uppercase;letter-spacing:.06em;font-weight:600;margin-bottom:8px;}
   .spark-svg{width:100%;height:50px;display:block;}
+
+  .backup-wrap{background:var(--iron-2);border:1px solid var(--line);border-radius:12px;padding:14px;margin-top:6px;}
+  .backup-label{font-family:'Oswald';font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:.03em;color:var(--chalk);margin-bottom:6px;}
+  .backup-note{font-size:11.5px;color:var(--chalk-dim);line-height:1.5;margin-bottom:12px;}
+  .backup-actions{display:flex;gap:9px;}
+  .backup-actions button{flex:1;height:44px;border-radius:9px;font-family:'Oswald';font-weight:600;font-size:12.5px;text-transform:uppercase;letter-spacing:.02em;cursor:pointer;border:1px solid var(--line);background:var(--iron);color:var(--chalk-dim);transition:transform .1s;-webkit-user-select:none;user-select:none;}
+  .backup-actions button:active{transform:scale(.96);}
+  .backup-actions #exportBtn{background:var(--rust);border-color:var(--rust);color:var(--chalk);}
 
   .plan-ex{background:var(--iron-2);border:1px solid var(--line);border-radius:12px;padding:12px 13px;margin-bottom:10px;display:flex;align-items:center;gap:10px;}
   .plan-ex .pn{flex:1;min-width:0;}
@@ -288,6 +307,7 @@ let plan=[], sessions=[], draft=null, bodyLog=[], settings={cycleStart:null,work
 let shift='morning', view='today', editingId=null, adding=false;
 let justCompletedId=null;
 let calYear=null, calMonth=null, cycleEditing=false;
+let restTimerId=null, restRunning=false, restTotal=90, restSecondsLeft=0;
 
 function haptic(pattern){
   if('vibrate' in navigator){ try{ navigator.vibrate(pattern); }catch(e){} }
@@ -316,7 +336,8 @@ async function loadAll(){
   sessions=await get(SESS_KEY, []);
   draft=await get(DAY_KEY, null);
   bodyLog=await get(BODY_KEY, []);
-  settings=await get(SETTINGS_KEY, {cycleStart:null,workOn:3,restOn:1});
+  const loadedSettings=await get(SETTINGS_KEY, {});
+  settings={cycleStart:null,workOn:3,restOn:1,restTimerSec:90,...loadedSettings};
   if(!draft || draft.date!==todayISO()) draft=null;
 }
 const savePlan=()=>set(PLAN_KEY,plan);
@@ -401,6 +422,37 @@ function renderPlateOut(id){
   out.innerHTML=`<b>${list}</b> kg per side (+ ${BAR_KG}kg bar)${bd.remainder>0.01?` · ${bd.remainder.toFixed(2)}kg left over, no plate that small`:''}`;
 }
 
+const fmtMMSS=sec=>`${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`;
+function safeRenderToday(){ if(view==='today') renderToday(); }
+function updateRestTimerUI(){
+  const timeEl=document.getElementById('rtTime'); if(!timeEl) return;
+  timeEl.textContent=fmtMMSS(Math.max(0,restSecondsLeft));
+  const fill=document.getElementById('rtFill');
+  if(fill) fill.style.width=`${Math.max(0,(restSecondsLeft/restTotal)*100)}%`;
+}
+function startRestTimer(){
+  clearInterval(restTimerId);
+  restTotal=settings.restTimerSec||90; restSecondsLeft=restTotal; restRunning=true;
+  restTimerId=setInterval(()=>{
+    restSecondsLeft--;
+    if(restSecondsLeft<=0){
+      clearInterval(restTimerId); restTimerId=null; restRunning=false;
+      haptic([20,60,20,60,40]);
+      safeRenderToday();
+    } else updateRestTimerUI();
+  },1000);
+}
+function stopRestTimer(shouldRender){
+  clearInterval(restTimerId); restTimerId=null; restRunning=false;
+  if(shouldRender!==false) safeRenderToday();
+}
+function adjustRestTimer(delta){
+  restTotal=Math.max(15,restTotal+delta);
+  restSecondsLeft=Math.max(0,restSecondsLeft+delta);
+  updateRestTimerUI();
+  settings.restTimerSec=restTotal; saveSettings();
+}
+
 function ensureDraft(){
   if(!draft || draft.date!==todayISO()) draft={date:todayISO(),shift,marks:{},weights:{}};
   draft.shift=shift;
@@ -420,7 +472,16 @@ function renderToday(){
     main.innerHTML=`<div class="empty"><div class="big">Bar's empty</div><p>Add exercises in Plan, then come back and get to work.</p></div>`;
     document.getElementById('saveSub').textContent=''; return;
   }
-  main.innerHTML=plan.map((ex,i)=>{
+  const timerHtml=restRunning?`<div class="rest-timer">
+      <div class="rt-head"><span class="rt-label">Rest</span><span class="rt-time" id="rtTime">${fmtMMSS(restSecondsLeft)}</span></div>
+      <div class="rt-bar"><div class="rt-fill" id="rtFill" style="width:${Math.max(0,(restSecondsLeft/restTotal)*100)}%"></div></div>
+      <div class="rt-actions">
+        <button type="button" id="rtMinus">−15s</button>
+        <button type="button" id="rtSkip">Skip rest</button>
+        <button type="button" id="rtPlus">+15s</button>
+      </div>
+    </div>`:'';
+  main.innerHTML=timerHtml+plan.map((ex,i)=>{
     const marks=draft.marks[ex.id];
     const doneCount=marks.filter(Boolean).length;
     const allDone=doneCount===ex.sets;
@@ -457,8 +518,16 @@ function renderToday(){
     const nowAllDone=marks.filter(Boolean).length===ex.sets;
     if(turningOn&&!wasAllDone&&nowAllDone){ justCompletedId=exId; haptic([12,25,12]); }
     else haptic(8);
+    if(turningOn) startRestTimer();
+    else if(restRunning) stopRestTimer(false);
     saveDraft(); renderToday();
   }));
+  const rtMinus=document.getElementById('rtMinus');
+  if(rtMinus)rtMinus.addEventListener('click',()=>{haptic(6);adjustRestTimer(-15);});
+  const rtPlus=document.getElementById('rtPlus');
+  if(rtPlus)rtPlus.addEventListener('click',()=>{haptic(6);adjustRestTimer(15);});
+  const rtSkip=document.getElementById('rtSkip');
+  if(rtSkip)rtSkip.addEventListener('click',()=>{haptic(10);stopRestTimer();});
   main.querySelectorAll('input[data-wex]').forEach(inp=>inp.addEventListener('input',()=>{
     const exId=inp.dataset.wex;
     draft.weights[exId]=inp.value.trim(); saveDraft();
@@ -581,6 +650,31 @@ function sparklineSvg(points){
   </div>`;
 }
 
+function exportBackup(){
+  const data={exportedAt:new Date().toISOString(),version:1,plan,sessions,bodyLog,settings};
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=`liftlog-backup-${todayISO()}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  toast('Backup downloaded');
+}
+async function importBackup(file){
+  let data;
+  try{ data=JSON.parse(await file.text()); }
+  catch(e){ toast('Could not read that file'); return; }
+  if(!data||!Array.isArray(data.plan)||!Array.isArray(data.sessions)){ toast('Not a valid backup file'); return; }
+  if(!confirm('Restore will replace all current data on this device with the backup. Continue?')) return;
+  plan=data.plan; sessions=data.sessions; bodyLog=Array.isArray(data.bodyLog)?data.bodyLog:[];
+  settings={cycleStart:null,workOn:3,restOn:1,restTimerSec:90,...(data.settings||{})};
+  await Promise.all([savePlan(),saveSessions(),saveBody(),saveSettings()]);
+  calYear=null; calMonth=null;
+  renderStreak();
+  toast('Backup restored');
+  setView(view);
+}
+
 function renderBody(){
   const main=document.getElementById('main');
   const sorted=[...bodyLog].sort((a,b)=>b.date.localeCompare(a.date));
@@ -625,7 +719,22 @@ function renderBody(){
     </div>`).join('');
   }
 
+  html+=`<div class="backup-wrap">
+    <div class="backup-label">Backup &amp; restore</div>
+    <p class="backup-note">Everything lives on this device only. Export a backup before switching phones or clearing browser data.</p>
+    <div class="backup-actions">
+      <button type="button" id="exportBtn">Export backup</button>
+      <button type="button" id="importBtn">Restore backup</button>
+    </div>
+    <input type="file" id="importFile" accept="application/json" style="display:none;">
+  </div>`;
+
   main.innerHTML=html;
+  document.getElementById('exportBtn').addEventListener('click',exportBackup);
+  document.getElementById('importBtn').addEventListener('click',()=>document.getElementById('importFile').click());
+  document.getElementById('importFile').addEventListener('change',e=>{
+    const f=e.target.files[0]; if(f) importBackup(f); e.target.value='';
+  });
 
   document.getElementById('b-save').addEventListener('click',async()=>{
     const date=document.getElementById('b-date').value||todayISO();
