@@ -60,6 +60,12 @@
   .wt input::placeholder{color:var(--chalk-dim);opacity:.5;}
   .wt .unit{position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:10.5px;font-weight:600;color:var(--chalk-dim);pointer-events:none;}
   .wt .pr{display:none;align-items:center;font-family:'Oswald';font-weight:600;font-size:10px;letter-spacing:.04em;color:var(--iron);background:var(--brass);padding:3px 7px;border-radius:5px;transform:rotate(-2deg);}
+  .plate-btn{width:32px;height:32px;border:1px solid var(--line);border-radius:8px;background:var(--iron);color:var(--chalk-dim);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;}
+  .plate-btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;}
+  .plate-btn.on{color:var(--rust);border-color:var(--rust);}
+  .plate-out{display:none;font-family:'JetBrains Mono';font-size:11.5px;line-height:1.5;color:var(--chalk-dim);background:var(--iron);border:1px solid var(--line);border-radius:8px;padding:9px 11px;margin:-3px 0 12px;}
+  .plate-out.show{display:block;}
+  .plate-out b{color:var(--rust-lt);}
   .wt .prog{margin-left:auto;font-family:'JetBrains Mono';font-weight:700;font-size:13px;color:var(--chalk-dim);font-variant-numeric:tabular-nums;}
 
   .ticks{display:grid;grid-template-columns:repeat(auto-fit,minmax(52px,1fr));gap:9px;}
@@ -83,6 +89,11 @@
 
   h2.view-title{font-family:'Oswald';font-weight:600;font-size:20px;letter-spacing:.01em;text-transform:uppercase;color:var(--chalk);padding:2px 4px 4px;}
   .view-note{font-size:12px;color:var(--chalk-dim);padding:0 4px 14px;line-height:1.45;}
+
+  .tonnage{background:var(--iron-2);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:14px;text-align:center;}
+  .tonnage-label{font-size:10.5px;color:var(--chalk-dim);text-transform:uppercase;letter-spacing:.08em;font-weight:600;margin-bottom:4px;}
+  .tonnage-num{font-family:'JetBrains Mono';font-weight:700;font-size:34px;color:var(--rust-lt);letter-spacing:.01em;font-variant-numeric:tabular-nums;}
+  .tonnage-unit{font-size:11px;color:var(--chalk-dim);text-transform:uppercase;letter-spacing:.06em;margin-top:2px;font-weight:600;}
 
   .plan-ex{background:var(--iron-2);border:1px solid var(--line);border-radius:12px;padding:12px 13px;margin-bottom:10px;display:flex;align-items:center;gap:10px;}
   .plan-ex .pn{flex:1;min-width:0;}
@@ -241,11 +252,52 @@ function computeStreak(){
   }
   return count;
 }
+/* Tier colors mirror real bumper-plate weights: 10kg green, 15kg yellow, 20kg blue, 25kg red */
+function streakTier(n){
+  if(n>=14) return {name:'Elite',color:'#c1502e',bg:'rgba(193,80,46,.16)',border:'rgba(193,80,46,.4)'};
+  if(n>=7) return {name:'Strong',color:'#4f8fd1',bg:'rgba(79,143,209,.16)',border:'rgba(79,143,209,.4)'};
+  if(n>=3) return {name:'Building',color:'#d4b23c',bg:'rgba(212,178,60,.16)',border:'rgba(212,178,60,.4)'};
+  return {name:'Starting',color:'#4a9b6e',bg:'rgba(74,155,110,.16)',border:'rgba(74,155,110,.4)'};
+}
 function renderStreak(){
   const n=computeStreak();
   const el=document.getElementById('streak');
-  document.getElementById('streakN').textContent=n;
-  el.style.display=n>0?'inline-flex':'none';
+  const numEl=document.getElementById('streakN');
+  numEl.textContent=n;
+  if(n>0){
+    const t=streakTier(n);
+    el.style.display='inline-flex';
+    el.style.background=t.bg;
+    el.style.borderColor=t.border;
+    el.querySelector('svg').style.fill=t.color;
+    numEl.style.color=t.color;
+    el.title=`${t.name} streak — ${n} day${n===1?'':'s'}`;
+  } else {
+    el.style.display='none';
+  }
+}
+
+const BAR_KG=20;
+const PLATE_SET=[25,20,15,10,5,2.5,1.25];
+function plateBreakdown(totalRaw){
+  const target=parseFloat(totalRaw);
+  if(isNaN(target)||target<=0) return null;
+  let perSide=(target-BAR_KG)/2;
+  if(perSide<=0) return {plates:[],remainder:0,barOnly:true};
+  const plates=[];
+  let remaining=perSide;
+  PLATE_SET.forEach(p=>{ while(remaining>=p-0.001){plates.push(p);remaining-=p;} });
+  return {plates,remainder:remaining,barOnly:false};
+}
+const fmtPlate=p=>Number.isInteger(p)?String(p):p.toFixed(2).replace(/0+$/,'').replace(/\.$/,'');
+function renderPlateOut(id){
+  const out=document.getElementById('plateout-'+id);
+  if(!out) return;
+  const bd=plateBreakdown(draft.weights[id]);
+  if(!bd){ out.innerHTML='Enter a weight first.'; return; }
+  if(bd.barOnly){ out.innerHTML=`Bar only <b>(${BAR_KG}kg)</b> — target is at or under empty bar weight.`; return; }
+  const list=bd.plates.map(fmtPlate).join(' + ');
+  out.innerHTML=`<b>${list}</b> kg per side (+ ${BAR_KG}kg bar)${bd.remainder>0.01?` · ${bd.remainder.toFixed(2)}kg left over, no plate that small`:''}`;
 }
 
 function ensureDraft(){
@@ -284,25 +336,40 @@ function renderToday(){
         <label>Weight</label>
         <span class="field"><input inputmode="decimal" data-wex="${ex.id}" value="${draft.weights[ex.id]||''}" placeholder="–"><span class="unit">kg</span></span>
         <span class="pr" data-pr="${ex.id}" style="display:${isPR?'inline-flex':'none'}">PR</span>
+        <button class="plate-btn" type="button" data-plate="${ex.id}" aria-label="Show plate breakdown"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="3.2"/><circle cx="19" cy="12" r="3.2"/><path d="M8.2 12h7.6"/></svg></button>
         <span class="prog">${doneCount}/${ex.sets}</span>
       </div>
+      <div class="plate-out" id="plateout-${ex.id}"></div>
       <div class="ticks">${ticks}</div>
     </div>`;
   }).join('');
 
   main.querySelectorAll('.tick').forEach(t=>t.addEventListener('click',()=>{
     const ex=t.dataset.ex, si=+t.dataset.si;
-    draft.marks[ex][si]=!draft.marks[ex][si]; saveDraft(); renderToday();
+    const turningOn=!draft.marks[ex][si];
+    draft.marks[ex][si]=turningOn;
+    if(turningOn&&!draft.startedAt) draft.startedAt=Date.now();
+    saveDraft(); renderToday();
   }));
   main.querySelectorAll('input[data-wex]').forEach(inp=>inp.addEventListener('input',()=>{
     const exId=inp.dataset.wex;
     draft.weights[exId]=inp.value.trim(); saveDraft();
-    /* keep focus, no full rerender — just refresh this row's PR badge */
+    /* keep focus, no full rerender — just refresh this row's PR badge and open plate breakdown */
     const ex=plan.find(p=>p.id===exId);
     const w=parseFloat(inp.value);
     const max=maxWeightFor(ex.name);
     const badge=inp.closest('.wt').querySelector('.pr');
     badge.style.display=(!isNaN(w)&&max!==null&&w>max)?'inline-flex':'none';
+    const out=document.getElementById('plateout-'+exId);
+    if(out.classList.contains('show')) renderPlateOut(exId);
+  }));
+  main.querySelectorAll('.plate-btn').forEach(b=>b.addEventListener('click',()=>{
+    const id=b.dataset.plate;
+    const out=document.getElementById('plateout-'+id);
+    const willShow=!out.classList.contains('show');
+    out.classList.toggle('show',willShow);
+    b.classList.toggle('on',willShow);
+    if(willShow) renderPlateOut(id);
   }));
 
   const totalSets=plan.reduce((a,e)=>a+e.sets,0);
@@ -320,8 +387,9 @@ async function saveWorkout(){
   const doneSets=plan.reduce((a,e)=>a+draft.marks[e.id].filter(Boolean).length,0);
   if(doneSets===0){toast('Tick at least one set first');return;}
   const entries=plan.map(ex=>({name:ex.name,reps:ex.reps,sets:ex.sets,done:draft.marks[ex.id].filter(Boolean).length,weight:draft.weights[ex.id]||''})).filter(e=>e.done>0);
+  const durationMin=draft.startedAt?Math.max(1,Math.round((Date.now()-draft.startedAt)/60000)):null;
   const idx=sessions.findIndex(s=>s.date===todayISO()&&s.shift===shift);
-  const rec={id:Date.now(),date:todayISO(),shift,entries,totalSets,doneSets};
+  const rec={id:Date.now(),date:todayISO(),shift,entries,totalSets,doneSets,durationMin};
   if(idx>=0)sessions[idx]=rec; else sessions.push(rec);
   await saveSessions();
   draft=null; await set(DAY_KEY,null);
@@ -379,6 +447,15 @@ function renderPlan(){
   });
 }
 
+function lifetimeTonnage(){
+  let total=0;
+  sessions.forEach(s=>s.entries.forEach(e=>{
+    const w=parseFloat(e.weight);
+    if(!isNaN(w)) total+=w*e.reps*e.done;
+  }));
+  return Math.round(total);
+}
+
 function renderHistory(){
   const main=document.getElementById('main');
   if(!sessions.length){
@@ -386,11 +463,14 @@ function renderHistory(){
     return;
   }
   const sorted=[...sessions].sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
-  main.innerHTML=`<h2 class="view-title">History</h2>`+sorted.map(s=>{
+  const tonnage=lifetimeTonnage();
+  const tonnageHtml=tonnage>0?`<div class="tonnage"><div class="tonnage-label">Total lifted</div><div class="tonnage-num">${tonnage.toLocaleString('en-GB')}</div><div class="tonnage-unit">kg, all-time</div></div>`:'';
+  main.innerHTML=`<h2 class="view-title">History</h2>`+tonnageHtml+sorted.map(s=>{
     const rows=s.entries.map(e=>`<div class="hrow"><span class="hn">${e.name}</span><span class="hv">${e.done}/${e.sets} sets${e.weight?` · ${e.weight}kg`:''}</span></div>`).join('');
+    const durationTxt=s.durationMin?` · ${s.durationMin} min`:'';
     return `<div class="hist-day">
       <div class="hist-top" data-id="${s.id}">
-        <div><div class="hist-date">${fmtDate(s.date)}</div><div class="hist-meta">${s.doneSets}/${s.totalSets} sets · ${s.entries.length} exercises</div></div>
+        <div><div class="hist-date">${fmtDate(s.date)}</div><div class="hist-meta">${s.doneSets}/${s.totalSets} sets · ${s.entries.length} exercises${durationTxt}</div></div>
         <span class="pill ${s.shift==='morning'?'m':'e'}">${s.shift}</span>
       </div>
       <div class="hist-body" id="hb-${s.id}">${rows}</div>
